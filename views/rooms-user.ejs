@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <link rel="stylesheet" href="/style.css" />
+    <script>
+      const ROOM_ID = "<%= roomId %>";
+    </script>
+    <script
+      defer
+      src="https://unpkg.com/peerjs@1.2.0/dist/peerjs.min.js"
+    ></script>
+    <script src="/socket.io/socket.io.js" defer></script>
+    <script src="script.js" defer></script>
+    <script src="modal.js" defer></script>
+    <title>Document</title>
+    <style>
+      #video-grid {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+
+      video {
+        width: 100%;
+        height: 89vh;
+        object-fit: cover;
+        border-radius: 4px;
+      }
+      @media (max-width: 468px) {
+        video {
+          object-fit: scale-down;
+        }
+      }
+      video.hidden {
+        position: absolute;
+        left: -9999px;
+        top: -9999px;
+      }
+      .chat-active {
+        width: 76vw;
+      }
+      #participants {
+        position: fixed;
+        bottom: 7px;
+        right: 8px;
+        width: 270px;
+        height: 93vh;
+        background: rgb(255, 255, 255);
+        border-radius: 5px;
+        box-shadow: rgba(0, 0, 0, 0.2) 0px 0px 10px;
+        display: none;
+        flex-direction: column;
+        padding: 15px;
+      }
+      #participants h3 {
+        background: #939393;
+        margin: 0;
+        padding: 10px;
+        border-radius: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="video-grid">
+      <video id="host" class="host"></video>
+      <div
+        style="
+          background: #000000;
+          height: 4px;
+          width: 100vw;
+          position: relative;
+        "
+      ></div>
+      <div class="btn">
+        <button class="mute-AB" id="audio-BTN" onclick="muteA();">
+          <img id="audio-img" src="/img/mic.png" />
+        </button>
+        <button data-modal-target="#modal" class="share-B">
+          <img src="/img/share.png" />
+        </button>
+        <button class="leave-B" id="leave-BTN" onclick="leave();">
+          <img id="leave-img" src="/img/logout.png" />
+        </button>
+        <button class="Chat-B" id="Chat-BTN" onclick="OpenChat();">
+          <img id="Chat-img" src="/img/chat.png" />
+        </button>
+      </div>
+      <script>
+        // width 76w
+        let isChatOpen = false;
+
+        function OpenChat() {
+          console.log("Chat Opened");
+          isChatOpen = !isChatOpen;
+          document.getElementById("chat-container").style.display = isChatOpen
+            ? "flex"
+            : "none";
+          if (isChatOpen) {
+            document.getElementById("video-grid").classList.add("chat-active");
+          } else {
+            document
+              .getElementById("video-grid")
+              .classList.remove("chat-active");
+          }
+        }
+      </script>
+      <!--Share Link Modal-start -->
+      <div class="modal" id="modal">
+        <div class="modal-header">
+          <div class="title">Invite People</div>
+          <button data-close-button class="close-button">&times;</button>
+        </div>
+        <div class="modal-body">
+          <a id="link">Link</a>
+          <p>
+            copy or share this link to your friends to invite them to the call
+          </p>
+          <button class="copy" id="copy">copy</button>
+          <button class="share" id="share">share</button>
+        </div>
+      </div>
+      <div id="overlay"></div>
+      <!--Share Link Modal-end -->
+    </div>
+    <div class="conts">
+      <div
+        id="chat-container"
+        style="
+          position: fixed;
+          bottom: 10px;
+          right: 8px;
+          width: 300px;
+          height: 97vh;
+          background: #fff;
+          border-radius: 5px;
+          box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+          display: none;
+          flex-direction: column;
+        "
+      >
+        <div
+          id="chat-messages"
+          style="
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            border-bottom: 1px solid #ccc;
+          "
+        >
+          <p style="color: #999">Chat started...</p>
+        </div>
+        <form id="chat-form" style="display: flex">
+          <input
+            id="chat-input"
+            type="text"
+            placeholder="Type a message"
+            style="flex: 1; border: none; padding: 10px"
+          />
+          <button
+            type="submit"
+            style="
+              background: #4caf50;
+              color: white;
+              border: none;
+              padding: 10px;
+            "
+          >
+            Send
+          </button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>
