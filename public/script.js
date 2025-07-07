@@ -1,5 +1,7 @@
 const socket = io("/");
 const videoGrid = document.getElementById("video-grid");
+  const vid = document.getElementById("host");
+
 const myPeer = new Peer(undefined, {
   config: {
     iceServers: [
@@ -26,8 +28,8 @@ const myPeer = new Peer(undefined, {
         username: "fa9979a6e783100976d5e7ae",
         credential: "XZhecIMeIDmPqIUs",
       },
-  ],
-  }
+    ],
+  },
 });
 const myVideo = document.createElement("video");
 myVideo.muted = true;
@@ -113,6 +115,30 @@ socket.on("room-closed", () => {
   alert("This room is no longer available.");
   window.location.href = "/end-call";
 });
+function addHostPlaceholder(hostName) {
+  const placeholder = document.createElement("div");
+  placeholder.id = "host-placeholder";
+  placeholder.classList.add("video-placeholder");
+  placeholder.innerHTML = `
+    <div class="placeholder-content">
+      <img src="/img/video_off_icon.png" alt="Video Off" />
+      <h2>${hostName}</h2>
+    </div>
+  `;
+  const grid = document.getElementById("video-grid");
+  grid.appendChild(placeholder);
+}
+function replacePlaceholderWithStream(video, stream) {
+  const placeholder = document.getElementById("host-placeholder");
+  if (placeholder) placeholder.remove();
+
+  vid.srcObject = stream;
+  vid.addEventListener("loadedmetadata", () => {
+    vid.play();
+  });
+}
+
+
 
 navigator.mediaDevices
   .getUserMedia({
@@ -124,18 +150,32 @@ navigator.mediaDevices
     localStream = stream;
 
     myPeer.on("call", (call) => {
+      // 👀 Check metadata
+
       call.answer(stream);
       const video = document.createElement("video");
       call.on("stream", (userVideoStream) => {
         const hasVideo = userVideoStream.getVideoTracks().length > 0;
-
-        if (hasVideo) {
+        console.log(userVideoStream);
+        if(hasVideo){
           console.log("This stream has a video track");
-          addHostVideoStream(video, userVideoStream);
-        } else {
+        }else{
           console.log("This stream has no video track");
-          addVideoStream(video, userVideoStream);
         }
+        if (call.metadata && call.metadata.role === "admin") {
+          console.log("This is the admin calling!");
+            addHostVideoStream(video, userVideoStream);
+        } else {
+          console.log("This is a normal participant.");
+            addVideoStream(video, userVideoStream);
+        }
+        // if (hasVideo) {
+        //   console.log("This stream has a video track");
+        //   addHostVideoStream(video, userVideoStream);
+        // } else {
+        //   console.log("This stream has no video track");
+        //   addVideoStream(video, userVideoStream);
+        // }
       });
     });
 
@@ -159,6 +199,7 @@ myPeer.on("open", async (id) => {
 function connectToNewUser(userId, stream) {
   const call = myPeer.call(userId, stream);
   const video = document.createElement("video");
+
   call.on("stream", (userVideoStream) => {
     const hasVideo = userVideoStream.getVideoTracks().length > 0;
 
@@ -187,7 +228,6 @@ function addVideoStream(video, stream) {
   videoGrid.append(video);
 }
 function addHostVideoStream(video, stream) {
-  const vid = document.getElementById("host");
   vid.srcObject = stream;
   vid.addEventListener("loadedmetadata", () => {
     vid.play();

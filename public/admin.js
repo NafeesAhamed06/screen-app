@@ -14,7 +14,6 @@ const videoimg = document.getElementById("video-img");
 const isHost = urlParams.get("admin") === "true";
 let localStream;
 
-
 document.getElementById("host").muted = true;
 
 socket.on("host-already-exists", () => {
@@ -94,15 +93,212 @@ socket.on("room-closed", () => {
   window.location.href = "/end-call";
 });
 
-Promise.all([
-  navigator.mediaDevices.getDisplayMedia({ video: true }),
-  navigator.mediaDevices.getUserMedia({ audio: true }),
-]).then(([screenStream, micStream]) => {
-  screenStream.addTrack(micStream.getAudioTracks()[0]);
-  localStream = screenStream;
+// function createFakeVideoTrack() {
+//   const canvas = document.createElement("canvas");
+//   canvas.width = 640;
+//   canvas.height = 480;
+//   const ctx = canvas.getContext("2d");
+
+//   // Start capturing stream
+//   const stream = canvas.captureStream(15); // 15 fps
+
+//   // Animate to force browser to render
+//   function drawBlackFrame() {
+//     ctx.fillStyle = "black";
+//     ctx.fillRect(0, 0, canvas.width, canvas.height);
+//     requestAnimationFrame(drawBlackFrame);
+//   }
+//   drawBlackFrame();
+
+//   return stream.getVideoTracks()[0];
+// }
+
+// function createFakeVideoTrack(hostName) {
+//   const canvas = document.createElement("canvas");
+//   canvas.width = 640;
+//   canvas.height = 480;
+//   const ctx = canvas.getContext("2d");
+
+//   // Load "video off" icon
+//   const videoOffIcon = new Image();
+//   videoOffIcon.src = "/img/videocamm.png"; // Path to your icon
+//   videoOffIcon.style.filter = "invert(1)"; // Invert colors for better visibility
+//   // Start capturing stream
+//   const stream = canvas.captureStream(15); // 15 fps
+
+//   function drawPlaceholder() {
+//     // Black background
+//     ctx.fillStyle = "black";
+//     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+//     // Draw video-off icon (centered)
+//     const iconSize = 64;
+//     ctx.drawImage(
+//       videoOffIcon,
+//       (canvas.width - iconSize) / 2,
+//       (canvas.height - iconSize) / 2 - 40, // slightly above name
+//       iconSize,
+//       iconSize
+//     );
+
+//     // Draw host name (centered)
+//     ctx.font = "30px Poppins";
+//     ctx.fillStyle = "white";
+//     ctx.textAlign = "center";
+
+//     ctx.fillText(hostName.toUpperCase(), canvas.width / 2, canvas.height / 2 + 40);
+
+//     requestAnimationFrame(drawPlaceholder);
+//   }
+
+//   videoOffIcon.onload = () => {
+//     drawPlaceholder();
+//   };
+
+//   return stream.getVideoTracks()[0];
+// }
+
+function createFakeVideoTrack(hostName) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 640;
+  canvas.height = 480;
+  const ctx = canvas.getContext("2d");
+
+  // Load "video off" icon
+  const videoOffIcon = new Image();
+  videoOffIcon.src = "/img/videocamm.png"; // Path to your icon
+
+  const stream = canvas.captureStream(60); // 15 fps
+
+  // Position and velocity
+  let x = Math.random() * (canvas.width - 100);
+  let y = Math.random() * (canvas.height - 100);
+  let dx = 2;
+  let dy = 2;
+
+  function drawPlaceholder() {
+    // Clear canvas
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw video-off icon and host name
+    const iconSize = 48;
+    ctx.drawImage(videoOffIcon, x, y, iconSize, iconSize);
+
+    ctx.font = "16px Poppins";
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.fillText(hostName.toUpperCase(), x + iconSize / 2, y + iconSize + 25);
+
+    // Move
+    x += dx;
+    y += dy;
+
+    // Bounce off walls
+    if (x <= 0 || x + iconSize >= canvas.width) dx = -dx;
+    if (y <= 0 || y + iconSize + 25 >= canvas.height) dy = -dy;
+
+    requestAnimationFrame(drawPlaceholder);
+  }
+
+  videoOffIcon.onload = () => {
+    drawPlaceholder();
+  };
+
+  return stream.getVideoTracks()[0];
+}
+
+// const shareSButton = document.getElementById("share-screen");
+// shareSButton.addEventListener("click", () => {
+//   navigator.mediaDevices
+//     .getDisplayMedia({ video: true })
+//     .then((screenStream) => {
+//       const newVideoTrack = screenStream.getVideoTracks()[0];
+
+//       // Replace video track for all connected users
+//       for (const userId in senders) {
+//         senders[userId].replaceTrack(newVideoTrack);
+//       }
+
+//       // Replace video in local stream
+//       localStream.removeTrack(localStream.getVideoTracks()[0]);
+//       localStream.addTrack(newVideoTrack);
+//       myVideo.srcObject = localStream;
+//     });
+// });
+
+const shareSButton = document.getElementById("share-screen");
+let isScreenSharing = false;
+let screenTrack = null;
+
+shareSButton.addEventListener("click", () => {
+  if (!isScreenSharing) {
+    // Start screen share
+    navigator.mediaDevices
+      .getDisplayMedia({ video: true })
+      .then((screenStream) => {
+        screenTrack = screenStream.getVideoTracks()[0];
+
+        // Replace video track for all connected users
+        for (const userId in senders) {
+          senders[userId].replaceTrack(screenTrack);
+        }
+
+        // Replace video in local stream
+        localStream.removeTrack(localStream.getVideoTracks()[0]);
+        localStream.addTrack(screenTrack);
+        myVideo.srcObject = localStream;
+
+        isScreenSharing = true;
+        // shareSButton.textContent = "Stop Screen Share";
+        videoimg.src = "/img/videocam_off.png";
+
+
+        // Handle when user stops sharing from browser
+        screenTrack.onended = () => {
+          stopScreenShare();
+        };
+      });
+  } else {
+    // Stop screen share
+    stopScreenShare();
+  }
+});
+
+function stopScreenShare() {
+  if (screenTrack) screenTrack.stop(); // Stop the current screen track
+  let username = getCookie("username");
+
+  // Create a fake placeholder video track (DVD animation)
+  const fakeTrack = createFakeVideoTrack(username); // Pass host name
+  for (const userId in senders) {
+    senders[userId].replaceTrack(fakeTrack);
+  }
+
+  // Replace video in local stream
+  localStream.removeTrack(localStream.getVideoTracks()[0]);
+  localStream.addTrack(fakeTrack);
+  myVideo.srcObject = localStream;
+
+  isScreenSharing = false;
+  // shareSButton.textContent = "Start Screen Share";
+  videoimg.src = "/img/videocam.png";
+
+}
+
+// Get mic audio + fake video
+navigator.mediaDevices.getUserMedia({ audio: true }).then((micStream) => {
+  let username = getCookie("username");
+
+  const fakeVideoTrack = createFakeVideoTrack(username);
+  localStream = new MediaStream([
+    fakeVideoTrack,
+    ...micStream.getAudioTracks(),
+  ]);
   addHostVideoStream(myVideo, localStream);
 
   myPeer.on("call", (call) => {
+    console.log("Connecting to new user: 106");
     call.answer(localStream);
     const video = document.createElement("video");
     call.on("stream", (userVideoStream) => {
@@ -153,8 +349,18 @@ socket.on("update-participants", (participants, hostPeerId) => {
   }
 });
 
+const senders = {}; // Keep track of userId -> sender
+
 function connectToNewUser(userId, stream) {
-  const call = myPeer.call(userId, stream);
+  console.log("Connecting to new user:", userId);
+  const call = myPeer.call(userId, stream, {
+    metadata: { role: "admin" }, // 👈 send "I am admin"
+  });
+  call.peerConnection.getSenders().forEach((sender) => {
+    if (sender.track && sender.track.kind === "video") {
+      senders[userId] = sender;
+    }
+  });
   const video = document.createElement("video");
   call.on("stream", (userVideoStream) => {
     const hasVideo = userVideoStream.getVideoTracks().length > 0;

@@ -48,6 +48,7 @@ app.get("/end-call", (req, res) => {
 
 io.on('connection', socket => {
   socket.on('join-room', (roomId, userId, isHost, username) => {
+    console.log(userId)
     if (!activeRooms[roomId]) {
       socket.emit('room-closed')
       return
@@ -112,7 +113,7 @@ io.on('connection', socket => {
         delete roomHosts[roomId];
       } else {
         delete roomUsers[roomId][userId]
-        io.to(roomId).emit('update-participants', roomUsers[roomId])
+        io.to(roomId).emit('update-participants', roomUsers[roomId], roomHosts[roomId])
         socket.to(roomId).broadcast.emit('user-disconnected', userId)
       }
     })
