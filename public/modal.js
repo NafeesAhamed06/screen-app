@@ -17,6 +17,7 @@ const shareData = {
 
 
 copyButton.addEventListener('click', () => {
+    alert("Copied to clipboard")
     navigator.clipboard.writeText(url.toString())
 })
 shareButton.addEventListener('click', () => {

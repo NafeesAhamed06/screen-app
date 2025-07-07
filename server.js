@@ -26,6 +26,13 @@ app.get("/create-room", (req, res) => {
   res.redirect(`/${newRoomId}?admin=true`);
 });
 
+
+app.get("/end-call", (req, res) => {
+    res.render("end-call"); // Show "Room Not Available"
+})
+app.get("/", (req, res) => {
+    res.render("room-not-available"); // Show "Room Not Available"
+})
 app.get("/:room", (req, res) => {
   if (activeRooms[req.params.room]) {
     if(req.query.admin === "true") {
@@ -38,13 +45,6 @@ app.get("/:room", (req, res) => {
     res.render("room-not-available"); // Show "Room Not Available"
   }
 });
-
-app.get("/", (req, res) => {
-    res.render("room-not-available"); // Show "Room Not Available"
-})
-app.get("/end-call", (req, res) => {
-    res.render("room-not-available"); // Show "Room Not Available"
-})
 
 io.on('connection', socket => {
   socket.on('join-room', (roomId, userId, isHost, username) => {

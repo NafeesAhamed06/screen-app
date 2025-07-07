@@ -21,9 +21,8 @@ socket.on("host-already-exists", () => {
     "A host is already in this room. You have been redirected as a participant."
   );
 
-  // Redirect to same room without ?admin=true
   const url = new URL(window.location.href);
-  url.searchParams.delete("admin"); // remove admin param
+  url.searchParams.delete("admin"); 
   window.location.href = url.toString();
 });
 
@@ -52,13 +51,10 @@ chatForm.addEventListener("submit", (e) => {
   }
 });
 
-// Receive message
 socket.on("chat-message", (data) => {
   const msgElement = document.createElement("p");
   msgElement.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
   chatMessages.appendChild(msgElement);
-
-  // Auto-scroll to bottom
   chatMessages.scrollTop = chatMessages.scrollHeight;
 });
 
@@ -164,13 +160,11 @@ function createFakeVideoTrack(hostName) {
   canvas.height = 480;
   const ctx = canvas.getContext("2d");
 
-  // Load "video off" icon
   const videoOffIcon = new Image();
   videoOffIcon.src = "/img/videocamm.png"; // Path to your icon
 
   const stream = canvas.captureStream(60); // 15 fps
 
-  // Position and velocity
   let x = Math.random() * (canvas.width - 100);
   let y = Math.random() * (canvas.height - 100);
   let dx = 2;

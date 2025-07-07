@@ -26,7 +26,7 @@
 
       video {
         width: 100%;
-        height: 89vh;
+        height: 87vh;
         object-fit: cover;
         border-radius: 4px;
       }
@@ -69,23 +69,24 @@
       <video id="host" class="host"></video>
       <div
         style="
-          background: #000000;
+          background: #ff9e3d;
           height: 4px;
           width: 100vw;
           position: relative;
+          margin: 0px 0px 8px 0px;
         "
       ></div>
       <div class="btn">
-        <button class="mute-AB" id="audio-BTN" onclick="muteA();">
+        <button class="mute-AB button" id="audio-BTN" onclick="muteA();">
           <img id="audio-img" src="/img/mic.png" />
         </button>
-        <button data-modal-target="#modal" class="share-B">
+        <button data-modal-target="#modal" class="share-B button">
           <img src="/img/share.png" />
         </button>
-        <button class="leave-B" id="leave-BTN" onclick="leave();">
+        <button class="leave-B button" id="leave-BTN" onclick="leave();">
           <img id="leave-img" src="/img/logout.png" />
         </button>
-        <button class="Chat-B" id="Chat-BTN" onclick="OpenChat();">
+        <button class="Chat-B button" id="Chat-BTN" onclick="OpenChat();">
           <img id="Chat-img" src="/img/chat.png" />
         </button>
       </div>
@@ -119,8 +120,11 @@
           <p>
             copy or share this link to your friends to invite them to the call
           </p>
-          <button class="copy" id="copy">copy</button>
-          <button class="share" id="share">share</button>
+          <div class="sh-save">
+
+            <button class="button" id="copy">copy</button>
+            <button class="button" id="share">share</button>
+          </div>
         </div>
       </div>
       <div id="overlay"></div>
@@ -163,7 +167,7 @@
           <button
             type="submit"
             style="
-              background: #4caf50;
+              background: #ff9e3d;
               color: white;
               border: none;
               padding: 10px;
