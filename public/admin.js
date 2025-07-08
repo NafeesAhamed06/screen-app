@@ -1,6 +1,34 @@
 const socket = io("/");
 const videoGrid = document.getElementById("video-grid");
-const myPeer = new Peer(undefined);
+const myPeer = new Peer(undefined, {
+  config: {
+    iceServers: [
+      {
+        urls: "stun:stun.relay.metered.ca:80",
+      },
+      {
+        urls: "turn:global.relay.metered.ca:80",
+        username: "fa9979a6e783100976d5e7ae",
+        credential: "XZhecIMeIDmPqIUs",
+      },
+      {
+        urls: "turn:global.relay.metered.ca:80?transport=tcp",
+        username: "fa9979a6e783100976d5e7ae",
+        credential: "XZhecIMeIDmPqIUs",
+      },
+      {
+        urls: "turn:global.relay.metered.ca:443",
+        username: "fa9979a6e783100976d5e7ae",
+        credential: "XZhecIMeIDmPqIUs",
+      },
+      {
+        urls: "turns:global.relay.metered.ca:443?transport=tcp",
+        username: "fa9979a6e783100976d5e7ae",
+        credential: "XZhecIMeIDmPqIUs",
+      },
+    ],
+  },
+});
 const myVideo = document.createElement("video");
 myVideo.muted = true;
 const peers = {};
@@ -11,8 +39,19 @@ const chatInput = document.getElementById("chat-input");
 const chatMessages = document.getElementById("chat-messages");
 const audioimg = document.getElementById("audio-img");
 const videoimg = document.getElementById("video-img");
+const shareSButton = document.getElementById("share-screen"); // Ensure this element exists in your HTML
 const isHost = urlParams.get("admin") === "true";
 let localStream;
+
+let originalVideoTrack;
+let originalAudioTrack;
+
+const videoSenders = {};
+const audioSenders = {};
+
+let isScreenSharing = false;
+let screenVideoTrack = null; // Renamed for clarity
+let screenAudioTrack = null; // New: to store the system audio track
 
 document.getElementById("host").muted = true;
 
@@ -22,7 +61,7 @@ socket.on("host-already-exists", () => {
   );
 
   const url = new URL(window.location.href);
-  url.searchParams.delete("admin"); 
+  url.searchParams.delete("admin");
   window.location.href = url.toString();
 });
 
@@ -89,199 +128,117 @@ socket.on("room-closed", () => {
   window.location.href = "/end-call";
 });
 
-// function createFakeVideoTrack() {
-//   const canvas = document.createElement("canvas");
-//   canvas.width = 640;
-//   canvas.height = 480;
-//   const ctx = canvas.getContext("2d");
-
-//   // Start capturing stream
-//   const stream = canvas.captureStream(15); // 15 fps
-
-//   // Animate to force browser to render
-//   function drawBlackFrame() {
-//     ctx.fillStyle = "black";
-//     ctx.fillRect(0, 0, canvas.width, canvas.height);
-//     requestAnimationFrame(drawBlackFrame);
-//   }
-//   drawBlackFrame();
-
-//   return stream.getVideoTracks()[0];
-// }
-
-// function createFakeVideoTrack(hostName) {
-//   const canvas = document.createElement("canvas");
-//   canvas.width = 640;
-//   canvas.height = 480;
-//   const ctx = canvas.getContext("2d");
-
-//   // Load "video off" icon
-//   const videoOffIcon = new Image();
-//   videoOffIcon.src = "/img/videocamm.png"; // Path to your icon
-//   videoOffIcon.style.filter = "invert(1)"; // Invert colors for better visibility
-//   // Start capturing stream
-//   const stream = canvas.captureStream(15); // 15 fps
-
-//   function drawPlaceholder() {
-//     // Black background
-//     ctx.fillStyle = "black";
-//     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-//     // Draw video-off icon (centered)
-//     const iconSize = 64;
-//     ctx.drawImage(
-//       videoOffIcon,
-//       (canvas.width - iconSize) / 2,
-//       (canvas.height - iconSize) / 2 - 40, // slightly above name
-//       iconSize,
-//       iconSize
-//     );
-
-//     // Draw host name (centered)
-//     ctx.font = "30px Poppins";
-//     ctx.fillStyle = "white";
-//     ctx.textAlign = "center";
-
-//     ctx.fillText(hostName.toUpperCase(), canvas.width / 2, canvas.height / 2 + 40);
-
-//     requestAnimationFrame(drawPlaceholder);
-//   }
-
-//   videoOffIcon.onload = () => {
-//     drawPlaceholder();
-//   };
-
-//   return stream.getVideoTracks()[0];
-// }
-
 function createFakeVideoTrack(hostName) {
   const canvas = document.createElement("canvas");
   canvas.width = 640;
   canvas.height = 480;
   const ctx = canvas.getContext("2d");
 
-  const videoOffIcon = new Image();
-  videoOffIcon.src = "/img/videocamm.png"; // Path to your icon
-
-  const stream = canvas.captureStream(60); // 15 fps
-
-  let x = Math.random() * (canvas.width - 100);
-  let y = Math.random() * (canvas.height - 100);
-  let dx = 2;
-  let dy = 2;
+  const stream = canvas.captureStream(30); // 30 fps to keep browser happy
 
   function drawPlaceholder() {
-    // Clear canvas
+    // Black background
     ctx.fillStyle = "black";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw video-off icon and host name
-    const iconSize = 48;
-    ctx.drawImage(videoOffIcon, x, y, iconSize, iconSize);
-
-    ctx.font = "16px Poppins";
+    ctx.font = "24px Poppins";
     ctx.fillStyle = "white";
     ctx.textAlign = "center";
-    ctx.fillText(hostName.toUpperCase(), x + iconSize / 2, y + iconSize + 25);
+    ctx.textBaseline = "middle";
+    ctx.fillText(hostName.toUpperCase(), canvas.width / 2, canvas.height / 2);
 
-    // Move
-    x += dx;
-    y += dy;
-
-    // Bounce off walls
-    if (x <= 0 || x + iconSize >= canvas.width) dx = -dx;
-    if (y <= 0 || y + iconSize + 25 >= canvas.height) dy = -dy;
-
-    requestAnimationFrame(drawPlaceholder);
+    requestAnimationFrame(drawPlaceholder); // Keep refreshing
   }
 
-  videoOffIcon.onload = () => {
-    drawPlaceholder();
-  };
+  drawPlaceholder();
 
   return stream.getVideoTracks()[0];
 }
 
-// const shareSButton = document.getElementById("share-screen");
-// shareSButton.addEventListener("click", () => {
-//   navigator.mediaDevices
-//     .getDisplayMedia({ video: true })
-//     .then((screenStream) => {
-//       const newVideoTrack = screenStream.getVideoTracks()[0];
-
-//       // Replace video track for all connected users
-//       for (const userId in senders) {
-//         senders[userId].replaceTrack(newVideoTrack);
-//       }
-
-//       // Replace video in local stream
-//       localStream.removeTrack(localStream.getVideoTracks()[0]);
-//       localStream.addTrack(newVideoTrack);
-//       myVideo.srcObject = localStream;
-//     });
-// });
-
-const shareSButton = document.getElementById("share-screen");
-let isScreenSharing = false;
-let screenTrack = null;
-
 shareSButton.addEventListener("click", () => {
   if (!isScreenSharing) {
-    // Start screen share
-    navigator.mediaDevices
-      .getDisplayMedia({ video: true })
-      .then((screenStream) => {
-        screenTrack = screenStream.getVideoTracks()[0];
+    originalVideoTrack = localStream.getVideoTracks()[0];
+    originalAudioTrack = localStream.getAudioTracks()[0];
 
-        // Replace video track for all connected users
-        for (const userId in senders) {
-          senders[userId].replaceTrack(screenTrack);
+    navigator.mediaDevices
+      .getDisplayMedia({ video: true, audio: true }) // Request audio here
+      .then((screenStream) => {
+        screenVideoTrack = screenStream.getVideoTracks()[0];
+        screenAudioTrack = screenStream.getAudioTracks()[0]; // Get the screen audio track
+
+        for (const userId in videoSenders) {
+          videoSenders[userId].replaceTrack(screenVideoTrack);
         }
 
-        // Replace video in local stream
-        localStream.removeTrack(localStream.getVideoTracks()[0]);
-        localStream.addTrack(screenTrack);
+        localStream.removeTrack(originalVideoTrack);
+        localStream.addTrack(screenVideoTrack);
+
+        if (screenAudioTrack) {
+          for (const userId in audioSenders) {
+            audioSenders[userId].replaceTrack(screenAudioTrack);
+          }
+          localStream.removeTrack(originalAudioTrack);
+          localStream.addTrack(screenAudioTrack);
+        }
+
         myVideo.srcObject = localStream;
-
         isScreenSharing = true;
-        // shareSButton.textContent = "Stop Screen Share";
-        videoimg.src = "/img/videocam_off.png";
+        videoimg.src = "/img/videocam_off.png"; // Assuming this indicates screen sharing is active
 
-
-        // Handle when user stops sharing from browser
-        screenTrack.onended = () => {
+        screenVideoTrack.onended = () => {
           stopScreenShare();
         };
+        if (screenAudioTrack) {
+          screenAudioTrack.onended = () => {
+            if (!screenVideoTrack || screenVideoTrack.readyState === 'ended') {
+                stopScreenShare();
+            }
+          };
+        }
+      })
+      .catch((error) => {
+        console.error("Could not start screen share:", error);
+        isScreenSharing = false;
       });
   } else {
-    // Stop screen share
     stopScreenShare();
   }
 });
 
 function stopScreenShare() {
-  if (screenTrack) screenTrack.stop(); // Stop the current screen track
-  let username = getCookie("username");
-
-  // Create a fake placeholder video track (DVD animation)
-  const fakeTrack = createFakeVideoTrack(username); // Pass host name
-  for (const userId in senders) {
-    senders[userId].replaceTrack(fakeTrack);
+  if (screenVideoTrack) {
+    screenVideoTrack.stop();
+    screenVideoTrack = null;
+  }
+  if (screenAudioTrack) {
+    screenAudioTrack.stop();
+    screenAudioTrack = null;
   }
 
-  // Replace video in local stream
-  localStream.removeTrack(localStream.getVideoTracks()[0]);
-  localStream.addTrack(fakeTrack);
+  if (originalVideoTrack) {
+    for (const userId in videoSenders) {
+      videoSenders[userId].replaceTrack(originalVideoTrack);
+    }
+    const currentLocalVideoTrack = localStream.getVideoTracks()[0];
+    if (currentLocalVideoTrack) localStream.removeTrack(currentLocalVideoTrack);
+    localStream.addTrack(originalVideoTrack);
+  }
+
+  if (originalAudioTrack) {
+    for (const userId in audioSenders) {
+      audioSenders[userId].replaceTrack(originalAudioTrack);
+    }
+    const currentLocalAudioTrack = localStream.getAudioTracks()[0];
+    if (currentLocalAudioTrack) localStream.removeTrack(currentLocalAudioTrack);
+    localStream.addTrack(originalAudioTrack);
+  }
+
   myVideo.srcObject = localStream;
-
   isScreenSharing = false;
-  // shareSButton.textContent = "Start Screen Share";
-  videoimg.src = "/img/videocam.png";
-
+  videoimg.src = "/img/videocam.png"; // Your icon for camera on
 }
 
-// Get mic audio + fake video
-navigator.mediaDevices.getUserMedia({ audio: true }).then((micStream) => {
+navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then((micStream) => {
   let username = getCookie("username");
 
   const fakeVideoTrack = createFakeVideoTrack(username);
@@ -289,22 +246,23 @@ navigator.mediaDevices.getUserMedia({ audio: true }).then((micStream) => {
     fakeVideoTrack,
     ...micStream.getAudioTracks(),
   ]);
+
+  originalVideoTrack = fakeVideoTrack;
+  originalAudioTrack = micStream.getAudioTracks()[0];
+
   addHostVideoStream(myVideo, localStream);
 
   myPeer.on("call", (call) => {
-    console.log("Connecting to new user: 106");
-    call.answer(localStream);
+    console.log("Connecting to new user:", call.peer);
+    call.answer(localStream); 
     const video = document.createElement("video");
     call.on("stream", (userVideoStream) => {
-      const hasVideo = userVideoStream.getVideoTracks().length > 0;
-
-      if (hasVideo) {
-        console.log("This stream has a video track");
-        addHostVideoStream(video, userVideoStream);
-      } else {
-        console.log("This stream has no video track");
-        addVideoStream(video, userVideoStream);
-      }
+     
+      addVideoStream(video, userVideoStream);
+    });
+    call.on('close', () => {
+        video.remove();
+        delete peers[call.peer];
     });
   });
 
@@ -314,7 +272,12 @@ navigator.mediaDevices.getUserMedia({ audio: true }).then((micStream) => {
 });
 
 socket.on("user-disconnected", (userId) => {
-  if (peers[userId]) peers[userId].close();
+  if (peers[userId]) {
+    peers[userId].close();
+    delete peers[userId]; 
+    delete videoSenders[userId]; 
+    delete audioSenders[userId]; 
+  }
 });
 
 myPeer.on("open", async (id) => {
@@ -327,48 +290,47 @@ myPeer.on("open", async (id) => {
   socket.emit("join-room", ROOM_ID, id, isHost, username);
 });
 
-let hostname;
-
 socket.on("update-participants", (participants, hostPeerId) => {
   if (isHost) {
     const participantDiv = document.getElementById("participants");
-    participantDiv.innerHTML = "<h3>Participants:</h3>";
-    for (const [peerId, username] of Object.entries(participants)) {
-      if (peerId === hostPeerId) {
-        participantDiv.innerHTML += `<p>${username} (HOST)</p>`;
-      } else {
-        participantDiv.innerHTML += `<p>${username}</p>`;
+    if (participantDiv) { // Check if participantDiv exists
+      participantDiv.innerHTML = "<h3>Participants:</h3>";
+      for (const [peerId, username] of Object.entries(participants)) {
+        if (peerId === hostPeerId) {
+          participantDiv.innerHTML += `<p>${username} (HOST)</p>`;
+        } else {
+          participantDiv.innerHTML += `<p>${username}</p>`;
+        }
       }
     }
   }
 });
 
-const senders = {}; // Keep track of userId -> sender
-
 function connectToNewUser(userId, stream) {
   console.log("Connecting to new user:", userId);
   const call = myPeer.call(userId, stream, {
-    metadata: { role: "admin" }, // 👈 send "I am admin"
+    metadata: { role: "admin" },
   });
+
   call.peerConnection.getSenders().forEach((sender) => {
-    if (sender.track && sender.track.kind === "video") {
-      senders[userId] = sender;
+    if (sender.track) {
+      if (sender.track.kind === "video") {
+        videoSenders[userId] = sender;
+      } else if (sender.track.kind === "audio") {
+        audioSenders[userId] = sender;
+      }
     }
   });
+
   const video = document.createElement("video");
   call.on("stream", (userVideoStream) => {
-    const hasVideo = userVideoStream.getVideoTracks().length > 0;
-
-    if (hasVideo) {
-      console.log("This stream has a video track");
-      addHostVideoStream(video, userVideoStream);
-    } else {
-      console.log("This stream has no video track");
-      addVideoStream(video, userVideoStream);
-    }
+    addVideoStream(video, userVideoStream);
   });
   call.on("close", () => {
     video.remove();
+    delete peers[userId];
+    delete videoSenders[userId];
+    delete audioSenders[userId];
   });
 
   peers[userId] = call;
@@ -376,26 +338,34 @@ function connectToNewUser(userId, stream) {
 
 function addVideoStream(video, stream) {
   video.srcObject = stream;
+  video.muted = false; // Remote videos should not be muted
   video.classList.add("hidden");
   video.addEventListener("loadedmetadata", () => {
     video.play();
   });
-
   videoGrid.append(video);
 }
+
 function addHostVideoStream(video, stream) {
-  const vid = document.getElementById("host");
-  vid.srcObject = stream;
-  vid.addEventListener("loadedmetadata", () => {
-    vid.play();
-  });
+  const vid = document.getElementById("host"); // Assuming 'host' is the ID for the local video element
+  if (vid) {
+    vid.srcObject = stream;
+    vid.muted = true; // Your own video should typically be muted
+    vid.addEventListener("loadedmetadata", () => {
+      vid.play();
+    });
+  }
 }
+
 let isAudio = true;
 let isVideo = true;
+
 function muteA() {
-  console.log("turned off audio");
+  console.log("toggling audio");
   isAudio = !isAudio;
-  localStream.getAudioTracks()[0].enabled = isAudio;
+  if (localStream && localStream.getAudioTracks().length > 0) {
+    localStream.getAudioTracks()[0].enabled = isAudio;
+  }
   if (isAudio) {
     audioimg.src = "/img/mic.png";
   } else {
@@ -404,9 +374,11 @@ function muteA() {
 }
 
 function muteV() {
-  console.log("turned off video");
+  console.log("toggling video");
   isVideo = !isVideo;
-  localStream.getVideoTracks()[0].enabled = isVideo;
+  if (localStream && localStream.getVideoTracks().length > 0) {
+    localStream.getVideoTracks()[0].enabled = isVideo;
+  }
   if (isVideo) {
     videoimg.src = "/img/videocam.png";
   } else {
@@ -415,5 +387,19 @@ function muteV() {
 }
 
 function leave() {
+  // Disconnect from PeerJS
+  myPeer.disconnect();
+  // Close all peer connections
+  for (const userId in peers) {
+    if (peers[userId]) {
+      peers[userId].close();
+    }
+  }
+  // Stop local media tracks
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+  }
+  // Emit leave room event to server
+  socket.emit("leave-room", ROOM_ID, myPeer.id);
   location.href = "/end-call";
 }
