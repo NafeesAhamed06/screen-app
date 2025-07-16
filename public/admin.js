@@ -161,40 +161,65 @@ shareSButton.addEventListener("click", () => {
     originalAudioTrack = localStream.getAudioTracks()[0];
 
     navigator.mediaDevices
-      .getDisplayMedia({ video: true, audio: true }) // Request audio here
+      .getDisplayMedia({ video: true, audio: true }) // Screen + system audio
       .then((screenStream) => {
-        screenVideoTrack = screenStream.getVideoTracks()[0];
-        screenAudioTrack = screenStream.getAudioTracks()[0]; // Get the screen audio track
+        // Capture microphone audio
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((micStream) => {
+            const screenVideoTrack = screenStream.getVideoTracks()[0];
+            const screenAudioTrack = screenStream.getAudioTracks()[0];
+            const micAudioTrack = micStream.getAudioTracks()[0];
 
-        for (const userId in videoSenders) {
-          videoSenders[userId].replaceTrack(screenVideoTrack);
-        }
+            // 🎙️ Combine system audio and mic audio
+            const mixedAudioStream = new MediaStream();
 
-        localStream.removeTrack(originalVideoTrack);
-        localStream.addTrack(screenVideoTrack);
+            const audioContext = new AudioContext();
+            const destination = audioContext.createMediaStreamDestination();
 
-        if (screenAudioTrack) {
-          for (const userId in audioSenders) {
-            audioSenders[userId].replaceTrack(screenAudioTrack);
-          }
-          localStream.removeTrack(originalAudioTrack);
-          localStream.addTrack(screenAudioTrack);
-        }
-
-        myVideo.srcObject = localStream;
-        isScreenSharing = true;
-        videoimg.src = "/img/videocam_off.png"; // Assuming this indicates screen sharing is active
-
-        screenVideoTrack.onended = () => {
-          stopScreenShare();
-        };
-        if (screenAudioTrack) {
-          screenAudioTrack.onended = () => {
-            if (!screenVideoTrack || screenVideoTrack.readyState === 'ended') {
-                stopScreenShare();
+            // System audio
+            if (screenAudioTrack) {
+              const systemSource = audioContext.createMediaStreamSource(
+                new MediaStream([screenAudioTrack])
+              );
+              systemSource.connect(destination);
             }
-          };
-        }
+
+            // Microphone audio
+            const micSource = audioContext.createMediaStreamSource(
+              new MediaStream([micAudioTrack])
+            );
+            micSource.connect(destination);
+
+            // Combine into one stream
+            mixedAudioStream.addTrack(destination.stream.getAudioTracks()[0]);
+
+            // Replace tracks
+            for (const userId in videoSenders) {
+              videoSenders[userId].replaceTrack(screenVideoTrack);
+            }
+
+            for (const userId in audioSenders) {
+              audioSenders[userId].replaceTrack(
+                mixedAudioStream.getAudioTracks()[0]
+              );
+            }
+
+            localStream.removeTrack(originalVideoTrack);
+            localStream.addTrack(screenVideoTrack);
+
+            localStream.removeTrack(originalAudioTrack);
+            localStream.addTrack(mixedAudioStream.getAudioTracks()[0]);
+
+            myVideo.srcObject = localStream;
+            isScreenSharing = true;
+            videoimg.src = "/img/videocam_off.png";
+
+            screenVideoTrack.onended = () => {
+              stopScreenShare();
+              micStream.getTracks().forEach((track) => track.stop()); // Stop mic when done
+            };
+          });
       })
       .catch((error) => {
         console.error("Could not start screen share:", error);
@@ -238,45 +263,46 @@ function stopScreenShare() {
   videoimg.src = "/img/videocam.png"; // Your icon for camera on
 }
 
-navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then((micStream) => {
-  let username = getCookie("username");
+navigator.mediaDevices
+  .getUserMedia({ audio: true, video: false })
+  .then((micStream) => {
+    let username = getCookie("username");
 
-  const fakeVideoTrack = createFakeVideoTrack(username);
-  localStream = new MediaStream([
-    fakeVideoTrack,
-    ...micStream.getAudioTracks(),
-  ]);
+    const fakeVideoTrack = createFakeVideoTrack(username);
+    localStream = new MediaStream([
+      fakeVideoTrack,
+      ...micStream.getAudioTracks(),
+    ]);
 
-  originalVideoTrack = fakeVideoTrack;
-  originalAudioTrack = micStream.getAudioTracks()[0];
+    originalVideoTrack = fakeVideoTrack;
+    originalAudioTrack = micStream.getAudioTracks()[0];
 
-  addHostVideoStream(myVideo, localStream);
+    addHostVideoStream(myVideo, localStream);
 
-  myPeer.on("call", (call) => {
-    console.log("Connecting to new user:", call.peer);
-    call.answer(localStream); 
-    const video = document.createElement("video");
-    call.on("stream", (userVideoStream) => {
-     
-      addVideoStream(video, userVideoStream);
-    });
-    call.on('close', () => {
+    myPeer.on("call", (call) => {
+      console.log("Connecting to new user:", call.peer);
+      call.answer(localStream);
+      const video = document.createElement("video");
+      call.on("stream", (userVideoStream) => {
+        addVideoStream(video, userVideoStream);
+      });
+      call.on("close", () => {
         video.remove();
         delete peers[call.peer];
+      });
+    });
+
+    socket.on("user-connected", (userId) => {
+      connectToNewUser(userId, localStream);
     });
   });
-
-  socket.on("user-connected", (userId) => {
-    connectToNewUser(userId, localStream);
-  });
-});
 
 socket.on("user-disconnected", (userId) => {
   if (peers[userId]) {
     peers[userId].close();
-    delete peers[userId]; 
-    delete videoSenders[userId]; 
-    delete audioSenders[userId]; 
+    delete peers[userId];
+    delete videoSenders[userId];
+    delete audioSenders[userId];
   }
 });
 
@@ -293,7 +319,8 @@ myPeer.on("open", async (id) => {
 socket.on("update-participants", (participants, hostPeerId) => {
   if (isHost) {
     const participantDiv = document.getElementById("participants");
-    if (participantDiv) { // Check if participantDiv exists
+    if (participantDiv) {
+      // Check if participantDiv exists
       participantDiv.innerHTML = "<h3>Participants:</h3>";
       for (const [peerId, username] of Object.entries(participants)) {
         if (peerId === hostPeerId) {
@@ -397,7 +424,7 @@ function leave() {
   }
   // Stop local media tracks
   if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
+    localStream.getTracks().forEach((track) => track.stop());
   }
   // Emit leave room event to server
   socket.emit("leave-room", ROOM_ID, myPeer.id);
